@@ -3,12 +3,22 @@ const OpenAI = require("openai");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 module.exports = async (req, res) => {
+  // 1) Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    return res.status(204).end();
+  }
+
+  // 2) Always allow CORS for actual requests
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
   try {
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method not allowed" });
     }
-    // use req.body instead of await req.json()
-    const { niche, tone, goal, topic } = req.body; 
+    const { niche, tone, goal, topic } = req.body;
     if (!niche || !tone || !goal || !topic) {
       return res.status(400).json({ error: "Missing required fields" });
     }
