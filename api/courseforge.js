@@ -3,7 +3,7 @@ const OpenAI = require("openai");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 module.exports = async (req, res) => {
-  // Handle CORS preflight
+  // === CORS PRE-FLIGHT ===
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
@@ -11,31 +11,37 @@ module.exports = async (req, res) => {
     return res.status(204).end();
   }
 
-  // Allow CORS on actual requests
+  // === ALWAYS ALLOW CORS ON ACTUAL REQUESTS ===
   res.setHeader("Access-Control-Allow-Origin", "*");
 
   try {
+    // Only allow POST
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method not allowed" });
     }
-    const { topic, audience, format, level } = req.body;
+
+    // Parse body
+    const { topic, audience, format, level } = req.body || {};
     if (!topic || !audience || !format || !level) {
       return res.status(400).json({ error: "Missing required fields" });
     }
+
+    // Call OpenAI
     const chat = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: "You create high-ticket online courses…" },
+        { role: "system", content: "You create high-ticket online courses." },
         {
           role: "user",
-          content: `Topic: ${topic}\nAudience: ${audience}\nFormat: ${format}\nLevel: ${level}`
-        }
-      ]
+          content: `Topic: ${topic}\nAudience: ${audience}\nFormat: ${format}\nLevel: ${level}`,
+        },
+      ],
     });
+
     const content = chat.choices?.[0]?.message?.content || "";
     return res.status(200).json({ course: content });
   } catch (err) {
     console.error("courseforge error:", err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message || "Server Error" });
   }
 };
