@@ -6,9 +6,31 @@ const redis = new Redis(process.env.REDIS_REST_URL, {
 });
 
 module.exports = async (req, res) => {
-  if (req.method !== "POST") return res.status(405).end();
+  // 1. Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    return res.status(204).end();
+  }
+
+  // 2. Allow CORS on actual request
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   const { email } = req.body;
-  if (!email) return res.status(400).json({ error: "Email required" });
-  const plan = await redis.get(`plan:${email}`);
-  res.status(200).json({ plan: plan || "free" });
+  if (!email) {
+    return res.status(400).json({ error: "Email required" });
+  }
+
+  try {
+    const plan = await redis.get(`plan:${email}`);
+    return res.status(200).json({ plan: plan || "free" });
+  } catch (err) {
+    console.error("getPlan error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
 };
