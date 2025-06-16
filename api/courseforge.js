@@ -3,7 +3,7 @@ const OpenAI = require("openai");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 module.exports = async (req, res) => {
-  // === CORS PRE-FLIGHT ===
+  // 1) CORS preflight
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
@@ -11,22 +11,22 @@ module.exports = async (req, res) => {
     return res.status(204).end();
   }
 
-  // === ALWAYS ALLOW CORS ON ACTUAL REQUESTS ===
+  // 2) Always allow CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
 
+  // 3) Only allow POST
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  // 4) Parse inputs
+  const { topic, audience, format, level } = req.body || {};
+  if (!topic || !audience || !format || !level) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
   try {
-    // Only allow POST
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method not allowed" });
-    }
-
-    // Parse body
-    const { topic, audience, format, level } = req.body || {};
-    if (!topic || !audience || !format || !level) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    // Call OpenAI
+    // 5) Call OpenAI
     const chat = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -38,7 +38,8 @@ module.exports = async (req, res) => {
       ],
     });
 
-    const content = chat.choices?.[0]?.message?.content || "";
+    // 6) Return course
+    const content = chat.choices[0].message.content || "";
     return res.status(200).json({ course: content });
   } catch (err) {
     console.error("courseforge error:", err);
