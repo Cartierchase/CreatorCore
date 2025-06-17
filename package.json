@@ -2,5 +2,15 @@
   "dependencies": {
     "ioredis": "^5.3.2",
     "openai": "^4.3.0"
+{
+  "dependencies": {
+    "ioredis": "^5.3.2",
+    "openai": "^4.3.0",
+    "pdfkit": "^0.13.0",
+    "get-stream": "^8.0.0"
+  }
+}
+
+    
   }
 }
