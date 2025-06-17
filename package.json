@@ -1,7 +1,7 @@
 {
   "name": "creatorcore-api",
   "version": "1.0.0",
-  "description": "CreatorCore AI serverless functions",
+  "description": "Serverless API for CreatorCore AI",
   "main": "api/getPlan.js",
   "scripts": {
     "start": "vercel dev",
