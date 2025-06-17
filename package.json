@@ -1,8 +1,8 @@
 {
   "name": "creatorcore-api",
   "version": "1.0.0",
-  "description": "Serverless API for CreatorCore AI (hookbrain, courseforge, webhook, getPlan)",
-  "main": "index.js",
+  "description": "CreatorCore AI serverless functions",
+  "main": "api/getPlan.js",
   "scripts": {
     "start": "vercel dev",
     "deploy": "vercel --prod"
