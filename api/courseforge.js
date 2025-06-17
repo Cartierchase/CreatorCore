@@ -1,10 +1,20 @@
 // api/courseforge.js
 const Redis  = require("ioredis");
-const redis  = new Redis(process.env.REDIS_REST_URL, { token: process.env.REDIS_TOKEN, tls:{} });
-const OpenAI = require("openai");
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let redis;
+try {
+  redis = new Redis(process.env.REDIS_REST_URL, {
+    token: process.env.REDIS_TOKEN,
+    tls: {}
+  });
+} catch {
+  redis = null; // skip rate-limits if Redis fails
+}
 
-const LIMITS = { free:3, creator:100, pro:500, lifetime:1000 };
+const { OpenAI } = require("openai");
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  baseOptions: { maxRetriesPerRequest: 2 }
+});
 
 module.exports = async (req, res) => {
   // CORS preflight
@@ -14,55 +24,61 @@ module.exports = async (req, res) => {
     res.setHeader("Access-Control-Allow-Headers","Content-Type,X-User-Plan,X-User-Id");
     return res.status(204).end();
   }
-  // Allow CORS
   res.setHeader("Access-Control-Allow-Origin","*");
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  try {
-    // Plan & user
-    const headerName = process.env.TRUSTED_PLAN_HEADER.toLowerCase();
-    const planHeader = req.headers[headerName] || "free";
-    const userId     = req.headers["x-user-id"]    || "guest";
-    const devList    = (process.env.DEV_USER_IDS||"").split(",");
-    const plan       = devList.includes(userId) ? "lifetime" : planHeader;
+  // Validate
+  const { topic, audience, format, level } = req.body || {};
+  if (![topic, audience, format, level].every(v => typeof v==="string" && v.trim())) {
+    return res.status(400).json({ error: "Missing or invalid fields" });
+  }
 
-    // Rate limit
-    if (!devList.includes(userId)) {
-      const limit = LIMITS[plan] || LIMITS.free;
+  // Determine plan/dev
+  const headerName = process.env.TRUSTED_PLAN_HEADER.toLowerCase();
+  const planHeader = req.headers[headerName] || "free";
+  const userId     = req.headers["x-user-id"]     || "guest";
+  const devList    = (process.env.DEV_USER_IDS||"").split(",");
+  const plan       = devList.includes(userId) ? "lifetime" : planHeader;
+
+  // Rate-limit (skip if dev or no Redis)
+  if (redis && !devList.includes(userId)) {
+    try {
+      const LIMITS = { free:3, creator:100, pro:500, lifetime:1000 };
       const key   = `u:${userId}:${new Date().toISOString().slice(0,10)}`;
       const cnt   = await redis.incr(key);
-      if (cnt === 1) {
-        const t = new Date(); t.setUTCDate(t.getUTCDate()+1); t.setUTCHours(0,0,0,0);
-        await redis.expire(key, Math.floor((t - new Date())/1000));
+      if (cnt===1) {
+        const t=new Date(); t.setUTCDate(t.getUTCDate()+1); t.setUTCHours(0,0,0,0);
+        await redis.expire(key,Math.floor((t - new Date())/1000));
       }
-      if (cnt > limit) {
+      if (cnt > LIMITS[plan]) {
         return res.status(429).json({ error: "Rate limit exceeded" });
       }
-    }
+    } catch {}
+  }
 
-    // Validate input
-    const { topic, audience, format, level } = req.body || {};
-    if (![topic,audience,format,level].every(v => typeof v === "string" && v.trim())) {
-      return res.status(400).json({ error: "Missing or invalid fields" });
-    }
+  // System prompt
+  const system = `
+You are a million-dollar-earning life coach who has sold millions of dollars of courses.
+Speak with authority, empathy, and clarity.
+Given the user’s topic, audience, format, and level,
+generate a high-ticket online course outline with modules, lessons, and key takeaways.
+Return JSON exactly in this shape:
+{ "course": "…detailed outline here…" }`.trim();
 
-    // Select model
-    let model = "gpt-4o-mini";
-    if (plan === "creator")                model = "gpt-3.5-turbo";
-    if (plan === "pro" || plan === "lifetime") model = "gpt-4-turbo";
-
-    // OpenAI call
+  try {
     const chat = await openai.chat.completions.create({
-      model,
+      model: plan==="creator" ? "gpt-3.5-turbo" : "gpt-4-turbo",
       messages: [
-        { role:"system", content:"You create course outlines." },
-        { role:"user",   content: JSON.stringify({ topic,audience,format,level }) }
+        { role:"system", content: system },
+        { role:"user",   content: JSON.stringify({ topic, audience, format, level }) }
       ]
     });
-    return res.status(200).json({ course: chat.choices[0].message.content });
 
+    return res.status(200).json({
+      course: chat.choices[0].message.content.trim()
+    });
   } catch (err) {
     console.error("courseforge error:", err);
     return res.status(500).json({ error: err.message || "Server error" });
