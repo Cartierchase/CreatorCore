@@ -1,9 +1,1 @@
-{
-  "name": "creatorcore-api",
-  "version": "1.0.0",
-  "dependencies": {
-    "ioredis": "^5.3.2",
-    "openai": "^4.3.0"
-  }
-}
 sed -i "s/\"__DEV__\"/\"$DEV_USER_IDS\"/g" public/index.html
